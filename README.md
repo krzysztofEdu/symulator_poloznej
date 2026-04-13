@@ -1,1 +1,1 @@
-Symulator położniczy: zawira uczenie maszynowe i symulacje zachowań
+Symulator położniczy: zawiera uczenie maszynowe i symulacje zachowań
