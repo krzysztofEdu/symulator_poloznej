@@ -708,7 +708,7 @@ na podstawie pełnego obrazu pacjentki.
 st.divider()
 st.markdown("""
 <div style='text-align:center;color:#888;font-size:0.82rem'>
-  🏥 Symulator Położniczy – ML w Praktyce Klinicznej · Informatyka Medyczna<br>
-  ⚠️ <b>Tylko do celów edukacyjnych.</b> Nie zastępuje oceny klinicznej ani wytycznych FIGO/PTG.
+  🏥 Symulator Położniczy opracowany na potrzeby zajęć: SI i ML w medycynie <br>
+  ⚠️ <b>Tylko do celów edukacyjnych.</b> Nie zastępuje oceny klinicznej ani wytycznych FIGO/PTG. autor Krzysztof Gajda
 </div>
 """, unsafe_allow_html=True)
