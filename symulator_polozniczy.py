@@ -59,7 +59,7 @@ with col_header:
     st.markdown("""
 <div class="main-header">
   <h1>🤰 Symulator Położniczy – ML w Praktyce Klinicznej</h1>
-  <p>Zadanie 3 (rozszerzone) · Informatyka Medyczna / Medycyna Matczyno-Płodowa · Studenci medycyny i położnictwa</p>
+  <p>Zadanie. Położnictwo II stopień: aplikacja tylko dla organizacji tych zajęć. Autor: Krzysztof Gajda</p>
 </div>
 """, unsafe_allow_html=True)
 with col_btn:
@@ -714,7 +714,7 @@ na podstawie pełnego obrazu pacjentki.
 st.divider()
 st.markdown("""
 <div style='text-align:center;color:#888;font-size:0.82rem'>
-  🏥 Symulator Położniczy – ML w Praktyce Klinicznej · Informatyka Medyczna<br>
-  ⚠️ <b>Tylko do celów edukacyjnych.</b> Nie zastępuje oceny klinicznej ani wytycznych FIGO/PTG.
+  🏥 Symulator Położniczy opracowany na potrzeby zajęć: SI i ML w medycynie<br>
+  ⚠️ <b>Tylko do celów edukacyjnych.</b> Nie zastępuje oceny klinicznej ani wytycznych FIGO/PTG. autor: Krzysztof Gajda.
 </div>
 """, unsafe_allow_html=True)
