@@ -57,7 +57,7 @@ st.markdown("""
 st.markdown("""
 <div class="main-header">
   <h1>🤰 Symulator Położniczy – ML w Praktyce Klinicznej</h1>
-  <p>Zadanie· Studia II stopnia. Prawa autorskie: Krzysztof Gajda</p>
+  <p>Zadanie. Położnictwo II stopień. autor: Krzysztof Gajda, aplikacja tylko dla organizacji tych zajęć.</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -396,7 +396,7 @@ def gen_ppt_fig(wiek, szyjka, tyg_w, crp, bmi, ffn, ppp, inf, mnog, pal, stres):
 # ════════════════════════════════════════════════════════════
 # TABS
 # ════════════════════════════════════════════════════════════
-tab1, tab2, tab3, tab4 = st.tabs(["📊 KTG", "👶 Apgar", "🤰 Poród przedwczesny", "📋 Scenariusze & Pytania"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 KTG", "👶 Apgar", "🤰 Poród przedwczesny", "📋 Scenariusze & Pytania", "🤖 O modelach"])
 
 
 # ────────────────────────────────────────────────────────────
@@ -592,6 +592,116 @@ Opracuj własny scenariusz kliniczny (opis przypadku ~5 zdań). Ustaw odpowiedni
 | A-2 | Wcześniak ze smółką | | |
 | P-1 | Niskie ryzyko PPT | | |
 | P-2 | Wysokie ryzyko PPT | | |
+""")
+
+# ────────────────────────────────────────────────────────────
+# TAB 5: O MODELACH
+# ────────────────────────────────────────────────────────────
+with tab5:
+    st.subheader("🤖 Jak działają modele AI w tym symulatorze?")
+    st.markdown("""
+> Poniższy opis jest skierowany do studentów medycyny i położnictwa —
+> bez konieczności znajomości programowania czy matematyki.
+""")
+    st.divider()
+
+    with st.expander("🧠 Czym jest uczenie maszynowe (Machine Learning)?", expanded=True):
+        st.markdown("""
+**Uczenie maszynowe** to sposób, w jaki komputer uczy się rozpoznawać wzorce
+— podobnie jak lekarz, który po wielu latach praktyki potrafi szybko ocenić
+zapis KTG „na pierwszy rzut oka".
+
+Zamiast programować reguły ręcznie (np. *„jeśli FHR < 110 → podejrzane"*),
+pokazujemy modelowi **tysiące przykładów** z odpowiedziami i pozwalamy mu
+samodzielnie odkryć, co jest ważne.
+
+W tym symulatorze każdy z trzech modeli (KTG, Apgar, PPT) „widział" podczas
+nauki **3000 wirtualnych przypadków klinicznych** wraz z poprawnymi klasyfikacjami.
+""")
+
+    with st.expander("🌳 Co to jest Random Forest (Las Losowy)?"):
+        st.markdown("""
+**Random Forest** to metoda, która buduje wiele **drzew decyzyjnych** i łączy ich wyniki — stąd nazwa „las".
+
+Wyobraź sobie konsylium lekarskie:
+- Każdy lekarz (= jedno drzewo) analizuje przypadek i wydaje opinię
+- Na końcu liczymy głosy — wygrywa diagnoza, którą wskazała **większość**
+- Im więcej lekarzy w konsylium, tym bardziej wiarygodny wynik
+
+W naszym symulatorze każdy model składa się z **150 drzew decyzyjnych**.
+Pasek „Pewność modelu: X%" pokazuje, ile procent drzew zgodziło się z podaną klasyfikacją.
+
+| Pewność | Interpretacja |
+|---------|--------------|
+| > 80% | Model jest bardzo pewny |
+| 60–80% | Umiarkowana pewność |
+| < 60% | Przypadek graniczny, wymaga oceny klinicznej |
+""")
+
+    with st.expander("📊 Skąd pochodzą dane treningowe?"):
+        st.markdown("""
+Dane użyte do treningu są **syntetyczne** — wygenerowane komputerowo według reguł klinicznych, a nie zebrane od prawdziwych pacjentek.
+
+**Dlaczego syntetyczne?**
+- Dane medyczne są objęte ścisłą ochroną prywatności (RODO)
+- Pozwala to dokładnie kontrolować rozkład przypadków
+- Umożliwia tworzenie trudnych scenariuszy klinicznych (np. ciężka kwasica)
+
+**Reguły generowania** są oparte na wytycznych klinicznych:
+
+| Model | Liczba przypadków treningowych | Źródło reguł |
+|-------|-------------------------------|-------------|
+| KTG   | 3 000 | FIGO 2015 |
+| Apgar | 3 000 | PTG / WHO |
+| PPT   | 3 000 | Wytyczne kliniczne |
+""")
+
+    with st.expander("⚕️ Co przewiduje każdy z trzech modeli?"):
+        st.markdown("""
+### 📊 Model KTG
+Klasyfikuje zapis KTG do jednej z trzech klas wg **FIGO 2015**:
+- **Klasa I (Prawidłowy)** — kontynuuj monitorowanie
+- **Klasa II (Wątpliwy)** — zwiększ czujność, rozważ interwencję
+- **Klasa III (Nieprawidłowy)** — natychmiastowe działanie kliniczne
+
+Najważniejsze parametry wejściowe: FHR baseline, STV, deceleracje późne.
+
+---
+### 👶 Model Apgar
+Przewiduje **wynik w skali Apgar w 1. minucie życia** (0–10) oraz kategorię stanu noworodka:
+- **7–10** → stan dobry
+- **4–6** → umiarkowany, wymaga stymulacji
+- **0–3** → ciężki, konieczna resuscytacja
+
+Najważniejsze parametry: tydzień ciąży, masa urodzeniowa, pH pępowiny, wody płodowe.
+
+---
+### 🤰 Model PPT
+Szacuje **prawdopodobieństwo porodu przedwczesnego** (przed 37. tygodniem):
+- **< 20%** → niskie ryzyko
+- **20–45%** → umiarkowane
+- **45–70%** → wysokie
+- **> 70%** → bardzo wysokie
+
+Najważniejsze parametry: długość szyjki macicy, fibronektyna płodowa (fFN), wywiad PPT.
+""")
+
+    with st.expander("⚠️ Ograniczenia modelu — czego AI nie wie?"):
+        st.markdown("""
+Modele w tym symulatorze są **narzędziem edukacyjnym**, a nie klinicznym systemem wspomagania decyzji.
+
+**Czego model nie uwzględnia:**
+- Dynamiki zmian w czasie (jeden wynik KTG to „zdjęcie", nie ciągły zapis)
+- Kontekstu klinicznego (wcześniejsze badania, wywiad rodzinny)
+- Rzadkich patologii nieobecnych w danych treningowych
+- Złożonych interakcji między wieloma czynnikami ryzyka jednocześnie
+
+**Złota zasada:** Model może sugerować, ale **decyzję kliniczną zawsze podejmuje lekarz**
+na podstawie pełnego obrazu pacjentki.
+
+---
+> 💡 **Pytanie do refleksji:** Czy potrafisz skonstruować scenariusz kliniczny,
+> w którym model myli się, a Ty jako klinicysta podjąłbyś inną decyzję?
 """)
 
 # ── FOOTER ───────────────────────────────────────────────────
