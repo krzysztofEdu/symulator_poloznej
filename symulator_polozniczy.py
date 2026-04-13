@@ -57,7 +57,7 @@ st.markdown("""
 st.markdown("""
 <div class="main-header">
   <h1>🤰 Symulator Położniczy – ML w Praktyce Klinicznej</h1>
-  <p>Zadanie 3 (rozszerzone) · Informatyka Medyczna / Medycyna Matczyno-Płodowa · Studenci medycyny i położnictwa</p>
+  <p>Zadanie· Studia II stopnia. Prawa autorskie: Krzysztof Gajda</p>
 </div>
 """, unsafe_allow_html=True)
 
