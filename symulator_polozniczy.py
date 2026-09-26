@@ -16,7 +16,6 @@ from matplotlib.patches import FancyBboxPatch
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
 import warnings
-import io
 
 warnings.filterwarnings('ignore')
 
@@ -53,6 +52,15 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ── RESET ────────────────────────────────────────────────────
+# Klucze widżetów zawierają licznik resetów – po jego zwiększeniu Streamlit
+# tworzy widżety od nowa z wartościami domyślnymi.
+def _reset_widgets():
+    st.session_state["reset_n"] = st.session_state.get("reset_n", 0) + 1
+
+def wkey(name):
+    return f"{name}_{st.session_state.get('reset_n', 0)}"
+
 # ── HEADER ───────────────────────────────────────────────────
 col_header, col_btn = st.columns([5, 1])
 with col_header:
@@ -64,8 +72,8 @@ with col_header:
 """, unsafe_allow_html=True)
 with col_btn:
     st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
-    if st.button("🔄 Początek", use_container_width=True, help="Resetuje wszystkie suwaki do wartości domyślnych"):
-        st.rerun()
+    st.button("🔄 Początek", use_container_width=True, help="Resetuje wszystkie suwaki do wartości domyślnych",
+              on_click=_reset_widgets)
 
 # ════════════════════════════════════════════════════════════
 # MODEL TRAINING (cached)
@@ -76,16 +84,16 @@ def train_models():
     N = 3000
 
     # ── KTG ─────────────────────────────────────────────────
-    fhr_base    = np.random.uniform(100, 175, N)
+    fhr_base    = np.random.uniform(90, 180, N)
     akceleracje = np.random.poisson(3, N).clip(0, 12)
     decel_wczesne = np.random.poisson(0.5, N).clip(0, 8)
-    decel_pozne  = np.random.poisson(0.3, N).clip(0, 6)
+    decel_pozne  = np.random.poisson(0.3, N).clip(0, 8)
     decel_zm     = np.random.poisson(0.4, N).clip(0, 8)
     stv          = np.random.uniform(0.5, 18, N)
     ltv          = np.random.uniform(0, 50, N)
     ruchy_plodu  = np.random.poisson(6, N).clip(0, 20)
     skurcze_mac  = np.random.poisson(2, N).clip(0, 10)
-    tydzien_ktg  = np.random.uniform(28, 42, N)
+    tydzien_ktg  = np.random.uniform(26, 42, N)
 
     score_ktg = np.zeros(N)
     score_ktg += np.where((fhr_base < 110) | (fhr_base > 160), 1.5, 0)
@@ -132,7 +140,7 @@ def train_models():
         - 0.25*cukrzyca_ap - 0.25*palenie_ap
         + 0.5*((ph_pepowiny-6.8)/0.7) + np.random.normal(0,0.3,N)
     )
-    apgar_raw = np.clip(2+8*(1/(1+np.exp(-score_apgar*2))),0,10).round(0).astype(int)
+    apgar_raw = np.clip(10*(1/(1+np.exp(-3*(score_apgar-0.1)))),0,10).round(0).astype(int)
     apgar_kat  = np.where(apgar_raw>=7, 2, np.where(apgar_raw>=4, 1, 0))
 
     df_apgar = pd.DataFrame({
@@ -173,7 +181,7 @@ def train_models():
         + 0.3*(stres_p==2) + 0.3*np.log1p(crp_p)/4
         + np.random.normal(0,0.55,N)
     )
-    prob_ppt = 1/(1+np.exp(-(score_ppt-1.4)))
+    prob_ppt = 1/(1+np.exp(-(score_ppt-2.8)))
     y_ppt = (np.random.random(N) < prob_ppt).astype(int)
 
     df_ppt = pd.DataFrame({
@@ -187,7 +195,7 @@ def train_models():
                  'infekcja_pochwy','ciaza_mnoga','palenie','crp_mgL','bmi','tydzien_wizyty','stres']
     sc_ppt = StandardScaler()
     X_ppt_sc = sc_ppt.fit_transform(df_ppt[feats_ppt])
-    rf_ppt = RandomForestClassifier(n_estimators=150, max_depth=10, random_state=42, class_weight='balanced')
+    rf_ppt = RandomForestClassifier(n_estimators=150, max_depth=6, min_samples_leaf=10, random_state=42)
     rf_ppt.fit(X_ppt_sc, df_ppt['ppt'])
 
     return (sc_ktg, rf_ktg, feats_ktg,
@@ -215,26 +223,48 @@ def gen_ktg_fig(fhr, akc, decW, decP, decZ, stv, ltv, ruch, skur, tktg):
     klasa_labels = {1:('PRAWIDŁOWY','#2e7d32','✅'), 2:('WĄTPLIWY','#e65100','⚠️'), 3:('NIEPRAWIDŁOWY','#b71c1c','🆘')}
     k_label, k_color, k_icon = klasa_labels[klasa]
 
+    # 30 min zapisu, 1 próbka = 1 s; parametry podawane są na 10 min → ×3 zdarzeń
     t = np.linspace(0, 30, 1800)
+    n = len(t)
     np.random.seed(42)
-    fhr_sig = np.full(len(t), fhr)
-    fhr_sig += np.random.normal(0, stv*0.3, len(t))
-    fhr_sig += (ltv/8)*np.sin(2*np.pi*t/25)
-    for _ in range(min(akc, 4)):
-        pos=np.random.randint(200,1600); w=np.random.randint(80,180); amp=np.random.uniform(12,22)
-        fhr_sig[pos:pos+w] += amp*np.exp(-((np.arange(w)-w//2)**2)/(2*(w//4)**2))
-    for _ in range(min(decP, 3)):
-        pos=np.random.randint(400,1400); w=np.random.randint(100,220); amp=np.random.uniform(15,35)
-        fhr_sig[pos:pos+w] -= amp*np.exp(-((np.arange(w)-w//2)**2)/(2*(w//4)**2))
-    for _ in range(min(decZ, 3)):
-        pos=np.random.randint(200,1600); w=np.random.randint(60,140); amp=np.random.uniform(20,45)
-        fhr_sig[pos:pos+w] -= amp*np.exp(-((np.arange(w)-w//2)**2)/(2*(w//5)**2))
+
+    def bump(center, w, amp, width_div=4):
+        """Krzywa Gaussa o szerokości w próbek, przycięta do długości zapisu."""
+        start = int(center) - w//2
+        idx = np.arange(max(start, 0), min(start + w, n))
+        return idx, amp*np.exp(-((idx - center)**2)/(2*(w/width_div)**2))
+
+    fhr_sig = np.full(n, fhr)
+    fhr_sig += np.random.normal(0, stv*0.3, n)
+    fhr_sig += (ltv/8)*np.sin(2*np.pi*t/1.5)
+    toco_sig = np.zeros(n)
+    n_skur = skur*3
+    skurcze_szczyty = []
+    for i in range(n_skur):
+        c = (i + 0.5)*n/n_skur + np.random.randint(-20, 20)
+        skurcze_szczyty.append(c)
+        idx, val = bump(c, np.random.randint(60, 90), 40)
+        toco_sig[idx] += val
+
+    def pozycje(k, opoznienie):
+        """Deceleracje wczesne/późne rysowane względem szczytów skurczów (jeśli są)."""
+        if skurcze_szczyty:
+            return [skurcze_szczyty[i % len(skurcze_szczyty)] + opoznienie for i in range(k)]
+        return list(np.random.randint(60, n-60, k))
+
+    for c in np.random.randint(30, n-30, akc*3):
+        idx, val = bump(c, np.random.randint(20, 60), np.random.uniform(15, 25))
+        fhr_sig[idx] += val
+    for c in pozycje(decW*3, 0):
+        idx, val = bump(c, np.random.randint(60, 90), np.random.uniform(10, 20))
+        fhr_sig[idx] -= val
+    for c in pozycje(decP*3, 30):
+        idx, val = bump(c, np.random.randint(60, 100), np.random.uniform(15, 35))
+        fhr_sig[idx] -= val
+    for c in np.random.randint(30, n-30, decZ*3):
+        idx, val = bump(c, np.random.randint(30, 90), np.random.uniform(20, 45), width_div=5)
+        fhr_sig[idx] -= val
     fhr_sig = np.clip(fhr_sig, 50, 210)
-    toco_sig = np.zeros(len(t))
-    for i in range(min(skur, 5)):
-        pos=int(i*len(t)/max(skur,1))+np.random.randint(-50,50)
-        pos=max(50,min(pos,len(t)-200)); w=np.random.randint(150,300)
-        toco_sig[pos:pos+w] += 40*np.exp(-((np.arange(w)-w//2)**2)/(2*(w//4)**2))
 
     fig = plt.figure(figsize=(13,8)); fig.patch.set_facecolor('#fafafa')
     gs = gridspec.GridSpec(3,2,figure=fig,hspace=0.55,wspace=0.35,height_ratios=[2.5,1.5,1])
@@ -249,13 +279,13 @@ def gen_ktg_fig(fhr, akc, decW, decP, decZ, stv, ltv, ruch, skur, tktg):
     ax1.set_ylim(60,210); ax1.set_xlim(0,30)
     ax1.set_ylabel('FHR [udc/min]',fontsize=11,fontweight='bold')
     ax1.set_title(f'KTG – FHR: {fhr:.0f} udc/min | STV: {stv} ms | Akceleracje: {akc} | Dec. późne: {decP}',fontsize=10)
-    ax1.legend(loc='upper right',fontsize=8); ax1.set_xlabel('Czas [s]',fontsize=10)
+    ax1.legend(loc='upper right',fontsize=8); ax1.set_xlabel('Czas [min]',fontsize=10)
     ax2 = fig.add_subplot(gs[1,:])
     ax2.set_facecolor('#f0f4ff')
     ax2.fill_between(t,toco_sig,alpha=0.5,color='#2980b9'); ax2.plot(t,toco_sig,color='#1a5276',lw=1.2)
-    ax2.set_ylim(0,100); ax2.set_xlim(0,30)
+    ax2.set_ylim(0,max(100,toco_sig.max()+10)); ax2.set_xlim(0,30)
     ax2.set_ylabel('TOCO [mmHg]',fontsize=10,fontweight='bold')
-    ax2.set_title(f'Skurcze macicy – {skur}/10 min',fontsize=10); ax2.set_xlabel('Czas [s]',fontsize=10)
+    ax2.set_title(f'Skurcze macicy – {skur}/10 min',fontsize=10); ax2.set_xlabel('Czas [min]',fontsize=10)
     ax3 = fig.add_subplot(gs[2,0]); ax3.axis('off')
     bbox=FancyBboxPatch((0.02,0.05),0.96,0.90,boxstyle="round,pad=0.03",
                         facecolor=k_color,edgecolor='white',alpha=0.9,transform=ax3.transAxes)
@@ -279,9 +309,9 @@ def gen_apgar_fig(tyg, masa, wody, por, ciec, nadc, cuk, pal, par, ph):
     ciec=int(ciec); nadc=int(nadc); cuk=int(cuk); pal=int(pal); par=int(par); ph=float(ph)
 
     X_in = sc_ap.transform([[tyg,masa,wody,por,ciec,nadc,cuk,pal,par,ph]])
-    kat = rf_ap_kat.predict(X_in)[0]
     prob = rf_ap_kat.predict_proba(X_in)[0]
     apgar_val = int(np.clip(round(rf_ap_reg.predict(X_in)[0]),0,10))
+    kat = 2 if apgar_val >= 7 else (1 if apgar_val >= 4 else 0)
     kat_info = {
         0:('Ciężki stan (0–3)','#b71c1c','RESUSCYTACJA – natychmiastowe działanie!'),
         1:('Umiarkowany (4–6)','#e65100','Stymulacja, tlen, monitorowanie'),
@@ -414,17 +444,17 @@ with tab1:
 
     col1, col2 = st.columns(2)
     with col1:
-        fhr  = st.slider("FHR baseline [udc/min]", 90, 180, 135, 1)
-        akc  = st.slider("Akceleracje [/10 min]", 0, 12, 3, 1)
-        decW = st.slider("Deceleracje wczesne", 0, 8, 0, 1)
-        decP = st.slider("Deceleracje późne ⚠️", 0, 8, 0, 1)
-        decZ = st.slider("Deceleracje zmienne", 0, 8, 0, 1)
+        fhr  = st.slider("FHR baseline [udc/min]", 90, 180, 135, 1, key=wkey("fhr"))
+        akc  = st.slider("Akceleracje [/10 min]", 0, 12, 3, 1, key=wkey("akc"))
+        decW = st.slider("Deceleracje wczesne", 0, 8, 0, 1, key=wkey("decW"))
+        decP = st.slider("Deceleracje późne ⚠️", 0, 8, 0, 1, key=wkey("decP"))
+        decZ = st.slider("Deceleracje zmienne", 0, 8, 0, 1, key=wkey("decZ"))
     with col2:
-        stv  = st.slider("STV – zmienność krótkoterminowa [ms]", 0.5, 18.0, 7.0, 0.5)
-        ltv  = st.slider("LTV – zmienność długoterminowa [ms]", 0, 50, 15, 1)
-        ruch = st.slider("Ruchy płodu [/30 min]", 0, 20, 5, 1)
-        skur = st.slider("Skurcze macicy [/10 min]", 0, 10, 2, 1)
-        tktg = st.slider("Tydzień ciąży [tc]", 26.0, 42.0, 38.0, 0.5)
+        stv  = st.slider("STV – zmienność krótkoterminowa [ms]", 0.5, 18.0, 7.0, 0.5, key=wkey("stv"))
+        ltv  = st.slider("LTV – zmienność długoterminowa [ms]", 0, 50, 15, 1, key=wkey("ltv"))
+        ruch = st.slider("Ruchy płodu [/30 min]", 0, 20, 5, 1, key=wkey("ruch"))
+        skur = st.slider("Skurcze macicy [/10 min]", 0, 10, 2, 1, key=wkey("skur"))
+        tktg = st.slider("Tydzień ciąży [tc]", 26.0, 42.0, 38.0, 0.5, key=wkey("tktg"))
 
     if st.button("▶ Generuj KTG", type="primary", use_container_width=True):
         with st.spinner("Generowanie wykresu KTG..."):
@@ -450,19 +480,19 @@ with tab2:
 
     col1, col2 = st.columns(2)
     with col1:
-        tyg_ap  = st.slider("Tydzień ciąży [tc]", 24.0, 42.0, 39.0, 0.5, key="ap_tyg")
-        masa    = st.slider("Masa urodzeniowa [g]", 400, 5500, 3300, 50)
-        por_h   = st.slider("Długość porodu [h]", 0.2, 50.0, 8.0, 0.2)
-        ph      = st.slider("pH krwi pępowiny", 6.80, 7.50, 7.28, 0.01)
+        tyg_ap  = st.slider("Tydzień ciąży [tc]", 24.0, 42.0, 39.0, 0.5, key=wkey("tyg_ap"))
+        masa    = st.slider("Masa urodzeniowa [g]", 400, 5500, 3300, 50, key=wkey("masa"))
+        por_h   = st.slider("Długość porodu [h]", 0.2, 50.0, 8.0, 0.2, key=wkey("por_h"))
+        ph      = st.slider("pH krwi pępowiny", 6.80, 7.50, 7.28, 0.01, key=wkey("ph"))
     with col2:
         wody    = st.selectbox("Wody płodowe", options=[0,1,2],
-                                format_func=lambda x: ["Czyste","Zabarwione krwią","Smółkowe"][x])
+                                format_func=lambda x: ["Czyste","Zabarwione krwią","Smółkowe"][x], key=wkey("wody"))
         par     = st.selectbox("Parzystość", options=[0,1,2],
-                                format_func=lambda x: ["Pierworódka","II poród","≥ III poród"][x])
-        ciec    = st.checkbox("Cięcie cesarskie")
-        nadc    = st.checkbox("Nadciśnienie w ciąży")
-        cuk     = st.checkbox("Cukrzyca ciążowa")
-        pal_a   = st.checkbox("Palenie w ciąży")
+                                format_func=lambda x: ["Pierworódka","II poród","≥ III poród"][x], key=wkey("par"))
+        ciec    = st.checkbox("Cięcie cesarskie", key=wkey("ciec"))
+        nadc    = st.checkbox("Nadciśnienie w ciąży", key=wkey("nadc"))
+        cuk     = st.checkbox("Cukrzyca ciążowa", key=wkey("cuk"))
+        pal_a   = st.checkbox("Palenie w ciąży", key=wkey("pal_a"))
 
     if st.button("▶ Oblicz Apgar", type="primary", use_container_width=True):
         with st.spinner("Obliczanie Apgar..."):
@@ -487,19 +517,19 @@ with tab3:
 
     col1, col2 = st.columns(2)
     with col1:
-        wiek_m   = st.slider("Wiek matki [lata]", 15, 46, 28, 1)
-        szyjka   = st.slider("Długość szyjki macicy [mm]", 3.0, 60.0, 38.0, 0.5)
-        tyg_w    = st.slider("Tydzień ciąży (wizyta) [tc]", 14.0, 34.0, 24.0, 0.5)
-        crp_val  = st.slider("CRP [mg/L]", 0.1, 60.0, 2.0, 0.5)
-        bmi_val  = st.slider("BMI przed ciążą", 15.0, 46.0, 24.0, 0.5)
+        wiek_m   = st.slider("Wiek matki [lata]", 15, 46, 28, 1, key=wkey("wiek_m"))
+        szyjka   = st.slider("Długość szyjki macicy [mm]", 3.0, 60.0, 38.0, 0.5, key=wkey("szyjka"))
+        tyg_w    = st.slider("Tydzień ciąży (wizyta) [tc]", 14.0, 34.0, 24.0, 0.5, key=wkey("tyg_w"))
+        crp_val  = st.slider("CRP [mg/L]", 0.1, 60.0, 2.0, 0.5, key=wkey("crp_val"))
+        bmi_val  = st.slider("BMI przed ciążą", 15.0, 46.0, 24.0, 0.5, key=wkey("bmi_val"))
     with col2:
         stres_p  = st.selectbox("Poziom stresu", options=[0,1,2],
-                                  format_func=lambda x: ["Brak","Umiarkowany","Duży"][x])
-        ffn_p    = st.checkbox("Fibronektyna płodowa (fFN) POZYTYWNA")
-        ppp_p    = st.checkbox("Poprzedni poród przedwczesny")
-        inf_p    = st.checkbox("Infekcja pochwy / szyjki")
-        mnog_p   = st.checkbox("Ciąża mnoga")
-        pal_p    = st.checkbox("Palenie papierosów")
+                                  format_func=lambda x: ["Brak","Umiarkowany","Duży"][x], key=wkey("stres_p"))
+        ffn_p    = st.checkbox("Fibronektyna płodowa (fFN) POZYTYWNA", key=wkey("ffn_p"))
+        ppp_p    = st.checkbox("Poprzedni poród przedwczesny", key=wkey("ppp_p"))
+        inf_p    = st.checkbox("Infekcja pochwy / szyjki", key=wkey("inf_p"))
+        mnog_p   = st.checkbox("Ciąża mnoga", key=wkey("mnog_p"))
+        pal_p    = st.checkbox("Palenie papierosów", key=wkey("pal_p"))
 
     if st.button("▶ Oblicz ryzyko PPT", type="primary", use_container_width=True):
         with st.spinner("Obliczanie ryzyka PPT..."):
@@ -552,7 +582,7 @@ Ustaw parametry w symulatorze zgodnie z poniższymi scenariuszami i zapisz wynik
         st.markdown("""
 **Pytanie:** Ustaw FHR = 120, STV = 2 ms, AKC = 0, DEC_PÓŹNE = 0. Czy wynik to FIGO 2 czy 3? Co oznacza izolowana niska STV bez deceleracji późnych?
 
-*Wskazówka: Niska STV (<3 ms) jest markerem kwasicy płodowej wg FIGO 2015.*
+*Wskazówka: Niska STV (<3 ms) w komputerowej analizie KTG (kryteria Dawes–Redman) wiąże się z ryzykiem kwasicy płodowej. STV nie jest kryterium klasyfikacji FIGO 2015.*
 """)
 
     with st.expander("3. APGAR – wpływ wód smółkowych i pH"):
@@ -566,7 +596,7 @@ Jak bardzo zmienił się Apgar? Który czynnik miał większy wpływ?
 
     with st.expander("4. PPT – próg długości szyjki macicy"):
         st.markdown("""
-**Pytanie:** Znajdź minimalną długość szyjki macicy (przy fFN– i bez innych czynników ryzyka), przy której model przekracza próg 45% ryzyka PPT. Ile wynosi? Porównaj z wytycznymi klinicznymi (próg 25 mm).
+**Pytanie:** Znajdź minimalną długość szyjki macicy (przy fFN– i bez innych czynników ryzyka), przy której model przekracza próg 20% ryzyka PPT (ryzyko umiarkowane). Ile wynosi? Porównaj z wytycznymi klinicznymi (próg 25 mm).
 """)
 
     with st.expander("5. PPT – wartość predykcyjna fFN"):
@@ -635,7 +665,7 @@ Wyobraź sobie konsylium lekarskie:
 - Im więcej lekarzy w konsylium, tym bardziej wiarygodny wynik
 
 W naszym symulatorze każdy model składa się z **150 drzew decyzyjnych**.
-Pasek „Pewność modelu: X%" pokazuje, ile procent drzew zgodziło się z podaną klasyfikacją.
+Pasek „Pewność modelu: X%" to średnie prawdopodobieństwo podanej klasy uśrednione po wszystkich drzewach — w przybliżeniu: jak zgodne jest konsylium.
 
 | Pewność | Interpretacja |
 |---------|--------------|
